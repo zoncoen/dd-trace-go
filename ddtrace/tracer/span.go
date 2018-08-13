@@ -13,21 +13,15 @@ import (
 	"github.com/tinylib/msgp/msgp"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/internal"
 )
 
-type (
-	// spanList implements msgp.Encodable on top of a slice of spans.
-	spanList []*span
-
-	// spanLists implements msgp.Decodable on top of a slice of spanList.
-	// This type is only used in tests.
-	spanLists []spanList
-)
+// spanList implements msgp.Encodable on top of a slice of spans.
+type spanList []*span
 
 var (
 	_ ddtrace.Span   = (*span)(nil)
 	_ msgp.Encodable = (*spanList)(nil)
-	_ msgp.Decodable = (*spanLists)(nil)
 )
 
 // span represents a computation. Callers must call Finish when a span is
@@ -48,8 +42,8 @@ type span struct {
 	ParentID uint64             `msg:"parent_id"`         // identifier of the span's direct parent
 	Error    int32              `msg:"error"`             // error status of the span; 0 means no errors
 
-	finished bool         `msg:"-"` // true if the span has been submitted to a tracer.
-	context  *spanContext `msg:"-"` // span propagation context
+	endOnce sync.Once    `msg:"-"`
+	context *spanContext `msg:"-"` // span propagation context
 }
 
 // Context yields the SpanContext for this Span. Note that the return
@@ -74,12 +68,6 @@ func (s *span) BaggageItem(key string) string {
 func (s *span) SetTag(key string, value interface{}) {
 	s.Lock()
 	defer s.Unlock()
-	// We don't lock spans when flushing, so we could have a data race when
-	// modifying a span as it's being flushed. This protects us against that
-	// race, since spans are marked `finished` before we flush them.
-	if s.finished {
-		return
-	}
 	if key == ext.Error {
 		s.setTagError(value, true)
 		return
@@ -100,9 +88,6 @@ func (s *span) SetTag(key string, value interface{}) {
 // setTagError sets the error tag. It accounts for various valid scenarios.
 // This method is not safe for concurrent use.
 func (s *span) setTagError(value interface{}, debugStack bool) {
-	if s.finished {
-		return
-	}
 	switch v := value.(type) {
 	case bool:
 		// bool value as per Opentracing spec.
@@ -160,22 +145,24 @@ func (s *span) setTagNumeric(key string, v float64) {
 // Finish closes this Span (but not its children) providing the duration
 // of its part of the tracing session.
 func (s *span) Finish(opts ...ddtrace.FinishOption) {
-	var cfg ddtrace.FinishConfig
-	for _, fn := range opts {
-		fn(&cfg)
-	}
-	var t int64
-	if cfg.FinishTime.IsZero() {
-		t = now()
-	} else {
-		t = cfg.FinishTime.UnixNano()
-	}
-	if cfg.Error != nil {
-		s.Lock()
-		s.setTagError(cfg.Error, !cfg.NoDebugStack)
-		s.Unlock()
-	}
-	s.finish(t)
+	s.endOnce.Do(func() {
+		var cfg ddtrace.FinishConfig
+		for _, fn := range opts {
+			fn(&cfg)
+		}
+		var t int64
+		if cfg.FinishTime.IsZero() {
+			t = now()
+		} else {
+			t = cfg.FinishTime.UnixNano()
+		}
+		if cfg.Error != nil {
+			s.Lock()
+			s.setTagError(cfg.Error, !cfg.NoDebugStack)
+			s.Unlock()
+		}
+		s.finish(t)
+	})
 }
 
 // SetOperationName sets or changes the operation name.
@@ -189,23 +176,30 @@ func (s *span) SetOperationName(operationName string) {
 func (s *span) finish(finishTime int64) {
 	s.Lock()
 	defer s.Unlock()
-	// We don't lock spans when flushing, so we could have a data race when
-	// modifying a span as it's being flushed. This protects us against that
-	// race, since spans are marked `finished` before we flush them.
-	if s.finished {
-		// already finished
-		return
-	}
 	if s.Duration == 0 {
 		s.Duration = finishTime - s.Start
 	}
-	s.finished = true
-
 	if !s.context.sampled {
 		// not sampled
 		return
 	}
-	s.context.finish()
+	if t, ok := internal.GetGlobalTracer().(*tracer); ok {
+		// copy it
+		t.exporter.exportSpan(&span{
+			Name:     s.Name,
+			Service:  s.Service,
+			Resource: s.Resource,
+			Type:     s.Type,
+			Start:    s.Start,
+			Duration: s.Duration,
+			Meta:     s.Meta,
+			Metrics:  s.Metrics,
+			SpanID:   s.SpanID,
+			TraceID:  s.TraceID,
+			ParentID: s.ParentID,
+			Error:    s.Error,
+		})
+	}
 }
 
 // String returns a human readable representation of the span. Not for

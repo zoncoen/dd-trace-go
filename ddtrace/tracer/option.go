@@ -32,14 +32,14 @@ type config struct {
 	// all spans.
 	globalTags map[string]interface{}
 
-	// transport specifies the Transport interface which will be used to send data to the agent.
-	transport transport
-
 	// propagator propagates span context cross-process
 	propagator Propagator
 
 	// httpRoundTripper defines the http.RoundTripper used by the agent transport.
 	httpRoundTripper http.RoundTripper
+
+	// exporter holds the exporter used for this tracer
+	exporter exporter
 }
 
 // StartOption represents a function that can be provided as a parameter to Start.
@@ -117,6 +117,10 @@ func WithHTTPRoundTripper(r http.RoundTripper) StartOption {
 	return func(c *config) {
 		c.httpRoundTripper = r
 	}
+}
+
+func withExporter(e exporter) StartOption {
+	return func(c *config) { c.exporter = e }
 }
 
 // StartSpanOption is a configuration option for StartSpan. It is aliased in order
