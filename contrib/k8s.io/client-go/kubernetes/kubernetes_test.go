@@ -17,6 +17,7 @@ import (
 func TestPathToResource(t *testing.T) {
 	expected := map[string]string{
 		"/api/v1/componentstatuses":                                           "componentstatuses",
+		"/api/v1/componentstatuses?timeout=10s&timeoutSeconds=10":             "componentstatuses",
 		"/api/v1/componentstatuses/NAME":                                      "componentstatuses/{name}",
 		"/api/v1/configmaps":                                                  "configmaps",
 		"/api/v1/namespaces/default/bindings":                                 "namespaces/{namespace}/bindings",
@@ -29,6 +30,8 @@ func TestPathToResource(t *testing.T) {
 		"/api/v1/watch/namespaces":                                            "watch/namespaces",
 		"/api/v1/watch/namespaces/default/configmaps":                         "watch/namespaces/{namespace}/configmaps",
 		"/api/v1/watch/namespaces/someothernamespace/configmaps/another-name": "watch/namespaces/{namespace}/configmaps/{name}",
+		"/apis/autoscaling/v2beta1/horizontalpodautoscalers?resourceVersion=3670338&timeout=1m0s&timeoutSeconds=394&watch=true": "autoscaling/v2beta1/horizontalpodautoscalers",
+		"/apis/datadog.com/v1/namespaces/datadog/nodepools?limit=500":                                                           "datadog.com/v1/namespaces/{namespace}/nodepools",
 	}
 
 	for path, expectedResource := range expected {

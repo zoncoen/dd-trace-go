@@ -13,6 +13,7 @@ import (
 
 const (
 	prefixAPI   = "/api/v1/"
+	prefixAPIS  = "/apis/"
 	prefixWatch = "watch/"
 )
 
@@ -36,16 +37,27 @@ func WrapRoundTripper(rt http.RoundTripper) http.RoundTripper {
 
 // RequestToResource parses a Kubernetes request and extracts a resource name from it.
 func RequestToResource(method, path string) string {
-	if !strings.HasPrefix(path, prefixAPI) {
-		return method
-	}
-
 	var out strings.Builder
 	out.WriteString(method)
 	out.WriteByte(' ')
 
+	path = strings.Split(path, "?")[0]
+	if !strings.HasPrefix(path, prefixAPI) {
+		path = strings.TrimPrefix(path, prefixAPIS)
+		splitted := strings.Split(path, "/")
+		for i, str := range splitted {
+			if i > 0 {
+				out.WriteByte('/')
+			}
+			if i > 0 && splitted[i-1] == "namespaces" {
+				out.WriteString("{namespace}")
+				continue
+			}
+			out.WriteString(str)
+		}
+		return out.String()
+	}
 	path = strings.TrimPrefix(path, prefixAPI)
-
 	if strings.HasPrefix(path, prefixWatch) {
 		// strip out /watch
 		path = strings.TrimPrefix(path, prefixWatch)
