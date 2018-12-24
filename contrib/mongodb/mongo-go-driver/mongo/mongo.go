@@ -11,10 +11,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mongodb/mongo-go-driver/core/event"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+
+	"github.com/mongodb/mongo-go-driver/bson"
+	"github.com/mongodb/mongo-go-driver/event"
 )
 
 type spanKey struct {
@@ -29,8 +31,11 @@ type monitor struct {
 
 func (m *monitor) Started(ctx context.Context, evt *event.CommandStartedEvent) {
 	hostname, port := peerInfo(evt)
-	statement := evt.Command.ToExtJSON(false)
-
+	statement, err := bson.MarshalExtJSON(evt.Command, false, false)
+	if err != nil {
+		// should never happen
+		return
+	}
 	span, _ := tracer.StartSpanFromContext(ctx, "mongodb.query",
 		tracer.ServiceName("mongo"),
 		tracer.ResourceName("mongo."+evt.CommandName),
