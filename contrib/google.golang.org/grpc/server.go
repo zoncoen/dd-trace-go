@@ -8,7 +8,7 @@ import (
 
 type serverStream struct {
 	grpc.ServerStream
-	cfg    *interceptorConfig
+	cfg    *config
 	method string
 	ctx    context.Context
 }
@@ -44,8 +44,8 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 }
 
 // StreamServerInterceptor will trace streaming requests to the given gRPC server.
-func StreamServerInterceptor(opts ...InterceptorOption) grpc.StreamServerInterceptor {
-	cfg := new(interceptorConfig)
+func StreamServerInterceptor(opts ...Option) grpc.StreamServerInterceptor {
+	cfg := new(config)
 	defaults(cfg)
 	for _, fn := range opts {
 		fn(cfg)
@@ -77,8 +77,8 @@ func StreamServerInterceptor(opts ...InterceptorOption) grpc.StreamServerInterce
 }
 
 // UnaryServerInterceptor will trace requests to the given grpc server.
-func UnaryServerInterceptor(opts ...InterceptorOption) grpc.UnaryServerInterceptor {
-	cfg := new(interceptorConfig)
+func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
+	cfg := new(config)
 	defaults(cfg)
 	for _, fn := range opts {
 		fn(cfg)

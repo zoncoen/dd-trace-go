@@ -2,11 +2,12 @@ package grpc
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"net"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/mocktracer"
@@ -445,12 +446,12 @@ func (r *rig) Close() {
 	r.listener.Close()
 }
 
-func newRig(traceClient bool, interceptorOpts ...InterceptorOption) (*rig, error) {
-	interceptorOpts = append([]InterceptorOption{WithServiceName("grpc")}, interceptorOpts...)
+func newRig(traceClient bool, opts ...Option) (*rig, error) {
+	opts = append([]Option{WithServiceName("grpc")}, opts...)
 
 	server := grpc.NewServer(
-		grpc.UnaryInterceptor(UnaryServerInterceptor(interceptorOpts...)),
-		grpc.StreamInterceptor(StreamServerInterceptor(interceptorOpts...)),
+		grpc.UnaryInterceptor(UnaryServerInterceptor(opts...)),
+		grpc.StreamInterceptor(StreamServerInterceptor(opts...)),
 	)
 
 	fixtureServer := new(fixtureServer)
@@ -464,14 +465,14 @@ func newRig(traceClient bool, interceptorOpts ...InterceptorOption) (*rig, error
 	// start our test fixtureServer.
 	go server.Serve(li)
 
-	opts := []grpc.DialOption{grpc.WithInsecure()}
+	dialOpts := []grpc.DialOption{grpc.WithInsecure()}
 	if traceClient {
-		opts = append(opts,
-			grpc.WithUnaryInterceptor(UnaryClientInterceptor(interceptorOpts...)),
-			grpc.WithStreamInterceptor(StreamClientInterceptor(interceptorOpts...)),
+		dialOpts = append(dialOpts,
+			grpc.WithUnaryInterceptor(UnaryClientInterceptor(opts...)),
+			grpc.WithStreamInterceptor(StreamClientInterceptor(opts...)),
 		)
 	}
-	conn, err := grpc.Dial(li.Addr().String(), opts...)
+	conn, err := grpc.Dial(li.Addr().String(), dialOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %s", err)
 	}

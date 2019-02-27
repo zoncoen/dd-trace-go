@@ -10,8 +10,9 @@ import (
 )
 
 // NewClientStatsHandler returns a gRPC client stats.Handler to trace RPC calls.
-func NewClientStatsHandler(opts ...StatsHandlerOption) stats.Handler {
-	cfg := newStatsHandlerConfig()
+func NewClientStatsHandler(opts ...Option) stats.Handler {
+	cfg := new(config)
+	defaults(cfg)
 	for _, fn := range opts {
 		fn(cfg)
 	}
@@ -21,7 +22,7 @@ func NewClientStatsHandler(opts ...StatsHandlerOption) stats.Handler {
 }
 
 type clientStatsHandler struct {
-	cfg *statsHandlerConfig
+	cfg *config
 }
 
 // TagRPC starts a new span for the initiated RPC request.
